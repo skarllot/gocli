@@ -203,6 +203,10 @@ func RecurseParents(c *Command, f RecurseGet) (successful bool) {
 	}
 
 	parent := c.parent
+	if parent == nil {
+		return false
+	}
+
 	for {
 		if parent.parent == nil {
 			return f(parent, false, true)
