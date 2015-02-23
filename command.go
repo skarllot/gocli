@@ -61,17 +61,18 @@ func (c *Command) Execute() error {
 	if c.exit == nil {
 		return errors.New("Cannot execute a command without an exit command")
 	}
-	if c.Run == nil && len(c.childs) == 0 {
-		return errors.New("Current command has no action and childs either")
-	}
 	if c.Run != nil && len(c.childs) != 0 {
 		return errors.New("Current command should not define an action and has childs")
 	}
 	if c.Load != nil && c.Run != nil {
-		return errors.New("Only Run or Load functions, not both")
+		return errors.New("Only Run or Load functions should be defined, not both")
 	}
+
 	if c.Load != nil {
 		c.Load(c)
+	}
+	if c.Run == nil && len(c.childs) == 0 {
+		return errors.New("Current command has no action and childs either")
 	}
 
 	for {
@@ -117,13 +118,11 @@ func (c *Command) Execute() error {
 			c.ShowHelp()
 			continue
 		}
-		if selCmd.Run == nil && len(selCmd.childs) == 0 {
+		if selCmd.Run == nil &&
+			selCmd.Load == nil &&
+			len(selCmd.childs) == 0 {
 			fmt.Printf("Missing action for %s command\n", selCmd.Name)
 			break
-		}
-		if selCmd.Run == nil && len(args) > 1 {
-			fmt.Println("Invalid arguments")
-			continue
 		}
 		if selCmd.Run == nil {
 			err = selCmd.Execute()
