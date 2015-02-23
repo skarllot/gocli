@@ -79,6 +79,7 @@ func (c *Command) Execute() error {
 	if !RecurseParents(c, func(cmd *Command, first, last bool) bool {
 		if cmd.exit != nil {
 			c.exit = cmd.exit
+			c.AddChild(cmd.exit)
 			return true
 		}
 		return false
@@ -88,6 +89,7 @@ func (c *Command) Execute() error {
 	if !RecurseParents(c, func(cmd *Command, first, last bool) bool {
 		if cmd.help != nil {
 			c.help = cmd.help
+			c.AddChild(cmd.exit)
 			return true
 		}
 		return false
@@ -144,14 +146,15 @@ func (c *Command) Execute() error {
 		if selCmd.Run == nil &&
 			selCmd.Load == nil &&
 			len(selCmd.childs) == 0 {
-			fmt.Printf("Missing action for %s command\n", selCmd.Name)
-			break
+			return errors.New(fmt.Sprintf(
+				"Missing action for %s command", selCmd.Name))
 		}
 		if selCmd.Run == nil {
 			err = selCmd.Execute()
 			if err != nil {
 				return err
 			}
+			continue
 		}
 
 		selCmd.Run(selCmd, args[1:])
