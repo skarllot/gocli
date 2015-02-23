@@ -44,6 +44,10 @@ type Command struct {
 // A Commands is a slice of Command pointers
 type Commands []*Command
 
+// RecurseGet represents an interaction from RecurseParent.
+// The successful returns true whether the value was got successfully.
+type RecurseGet func(cmd *Command, first, last bool) (successful bool)
+
 // AddChild adds one or more child commands.
 func (c *Command) AddChild(cmds ...*Command) {
 	for _, v := range cmds {
@@ -58,9 +62,6 @@ func (c *Command) AddChild(cmds ...*Command) {
 
 // Execute an interactive CLI until users exits.
 func (c *Command) Execute() error {
-	if c.exit == nil {
-		return errors.New("Cannot execute a command without an exit command")
-	}
 	if c.Run != nil && len(c.childs) != 0 {
 		return errors.New("Current command should not define an action and has childs")
 	}
@@ -72,23 +73,45 @@ func (c *Command) Execute() error {
 		c.Load(c)
 	}
 	if c.Run == nil && len(c.childs) == 0 {
-		return errors.New("Current command has no action and childs either")
+		return errors.New("Current command has neither action and childs")
+	}
+
+	if !RecurseParents(c, func(cmd *Command, first, last bool) bool {
+		if cmd.exit != nil {
+			c.exit = cmd.exit
+			return true
+		}
+		return false
+	}) {
+		ExitCommand(c)
+	}
+	if !RecurseParents(c, func(cmd *Command, first, last bool) bool {
+		if cmd.help != nil {
+			c.help = cmd.help
+			return true
+		}
+		return false
+	}) {
+		HelpCommand(c)
 	}
 
 	for {
 		if c.parent == nil {
 			fmt.Printf("%s>", c.Name)
 		} else {
-			prompt := fmt.Sprintf("%s)>", c.Name)
-			parent := c.parent
-			for {
-				if parent.parent == nil {
+			prompt := ""
+			RecurseParents(c, func(cmd *Command, first, last bool) bool {
+				if first {
+					prompt = fmt.Sprintf("%s)>", c.Name)
+					return false
+				}
+				if last {
 					prompt = fmt.Sprintf("%s(%s", parent.Name, prompt)
-					break
+					return false
 				}
 				prompt = fmt.Sprintf("%s/%s", parent.Name, prompt)
-				parent = parent.parent
-			}
+				return false
+			})
 			fmt.Print(prompt)
 		}
 
@@ -170,6 +193,27 @@ func HelpCommand(parent *Command) *Command {
 	parent.help = cmd
 	parent.AddChild(cmd)
 	return cmd
+}
+
+// RecurseParents interates from current commands to all its parents until
+// the function returns true.
+func RecurseParents(c *Command, f RecurseGet) (successful bool) {
+	if f(c, true, false) {
+		return true
+	}
+
+	parent := c.parent
+	for {
+		if parent.parent == nil {
+			return f(parent, false, true)
+		}
+		if f(parent, false, false) {
+			return true
+		}
+		parent = parent.parent
+	}
+
+	return false
 }
 
 // ShowHelp prints out short help of all child commands.
