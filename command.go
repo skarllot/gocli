@@ -89,7 +89,7 @@ func (c *Command) Execute() error {
 	if !RecurseParents(c, func(cmd *Command, first, last bool) bool {
 		if cmd.help != nil {
 			c.help = cmd.help
-			c.AddChild(cmd.exit)
+			c.AddChild(cmd.help)
 			return true
 		}
 		return false
