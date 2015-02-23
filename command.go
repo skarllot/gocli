@@ -22,17 +22,29 @@ import (
 	"strings"
 )
 
+// A Command represents a CLI command.
 type Command struct {
-	Name   string
-	Short  string
-	Long   string
-	Run    func(cmd *Command, args []string)
-	childs []*Command
+	// Name of command.
+	Name string
+	// Short help for command.
+	Short string
+	// Long help for command.
+	Long string
+	// Run is a function that is executed at user call.
+	Run func(cmd *Command, args []string)
+	// Load is a function that is executed when a parent command is called.
+	Load func(cmd *Command)
+
+	childs Commands
 	parent *Command
 	exit   *Command
 	help   *Command
 }
 
+// A Commands is a slice of Command pointers
+type Commands []*Command
+
+// AddChild adds one or more child commands.
 func (c *Command) AddChild(cmds ...*Command) {
 	for _, v := range cmds {
 		if v == c {
@@ -44,6 +56,7 @@ func (c *Command) AddChild(cmds ...*Command) {
 	}
 }
 
+// Execute an interactive CLI until users exits.
 func (c *Command) Execute() error {
 	if c.exit == nil {
 		return errors.New("Cannot execute a command without an exit command")
@@ -53,6 +66,12 @@ func (c *Command) Execute() error {
 	}
 	if c.Run != nil && len(c.childs) != 0 {
 		return errors.New("Current command should not define an action and has childs")
+	}
+	if c.Load != nil && c.Run != nil {
+		return errors.New("Only Run or Load functions, not both")
+	}
+	if c.Load != nil {
+		c.Load(c)
 	}
 
 	for {
@@ -119,6 +138,8 @@ func (c *Command) Execute() error {
 	return nil
 }
 
+// ExitCommand creates a new exit command and adds it to selected parent
+// command.
 func ExitCommand(parent *Command) *Command {
 	cmd := &Command{
 		Name:  "exit",
@@ -129,6 +150,7 @@ func ExitCommand(parent *Command) *Command {
 	return cmd
 }
 
+// Find finds a command by its name.
 func (c *Command) Find(name string) *Command {
 	for _, v := range c.childs {
 		if v.Name == name {
@@ -139,6 +161,8 @@ func (c *Command) Find(name string) *Command {
 	return nil
 }
 
+// HelpCommand creates a new help command and adds it to selected parent
+// command.
 func HelpCommand(parent *Command) *Command {
 	cmd := &Command{
 		Name:  "help",
@@ -149,6 +173,7 @@ func HelpCommand(parent *Command) *Command {
 	return cmd
 }
 
+// ShowHelp prints out short help of all child commands.
 func (c *Command) ShowHelp() {
 	for _, v := range c.childs {
 		fmt.Printf("%s\t\t%s\n", v.Name, v.Short)
