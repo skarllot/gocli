@@ -1,0 +1,36 @@
+/*
+* Copyright 2015 Fabrício Godoy
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+* http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+ */
+
+package gocli
+
+import (
+	"bufio"
+	"os"
+	"strings"
+)
+
+func readString() (string, error) {
+	stdin := bufio.NewReader(os.Stdin)
+	in, err := stdin.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+
+	in = strings.Replace(in, "\n", "", -1)
+	in = strings.Replace(in, "\r", "", -1)
+
+	return in, nil
+}
