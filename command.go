@@ -102,14 +102,14 @@ func (c *Command) Execute() error {
 			prompt := ""
 			RecurseParents(c, func(cmd *Command, first, last bool) bool {
 				if first {
-					prompt = fmt.Sprintf("%s)>", c.Name)
+					prompt = fmt.Sprintf("%s)>", cmd.Name)
 					return false
 				}
 				if last {
-					prompt = fmt.Sprintf("%s(%s", parent.Name, prompt)
+					prompt = fmt.Sprintf("%s(%s", cmd.Name, prompt)
 					return false
 				}
-				prompt = fmt.Sprintf("%s/%s", parent.Name, prompt)
+				prompt = fmt.Sprintf("%s/%s", cmd.Name, prompt)
 				return false
 			})
 			fmt.Print(prompt)
