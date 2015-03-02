@@ -19,8 +19,19 @@ package gocli
 import (
 	"bufio"
 	"os"
+	"regexp"
 	"strings"
 )
+
+const (
+	PARAMETERS_PATTERN = `"((?:[^"]|\")*)"|(\S+)`
+)
+
+var rArgs *regexp.Regexp
+
+func init() {
+	rArgs, _ = regexp.Compile(PARAMETERS_PATTERN)
+}
 
 func readString() (string, error) {
 	stdin := bufio.NewReader(os.Stdin)
@@ -33,4 +44,22 @@ func readString() (string, error) {
 	in = strings.Replace(in, "\r", "", -1)
 
 	return in, nil
+}
+
+func parseArgs(args string) []string {
+	matches := rArgs.FindAllStringSubmatch(args, -1)
+	if matches == nil {
+		return []string{args}
+	}
+
+	retArgs := make([]string, 0, len(matches))
+	for _, m := range matches {
+		if len(m[1]) > 0 {
+			retArgs = append(retArgs, m[1])
+		} else {
+			retArgs = append(retArgs, m[2])
+		}
+	}
+
+	return retArgs
 }

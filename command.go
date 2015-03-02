@@ -26,10 +26,10 @@ import (
 type Command struct {
 	// Name of command.
 	Name string
-	// Short help for command.
-	Short string
-	// Long help for command.
-	Long string
+	// Help for command.
+	Help string
+	// Paremeters accepted by command.
+	Parameters []Parameter
 	// Run is a function that is executed at user call.
 	Run func(cmd *Command, args []string)
 	// Load is a function that is executed when a parent command is called.
@@ -39,6 +39,16 @@ type Command struct {
 	parent *Command
 	exit   *Command
 	help   *Command
+}
+
+// A Parameter represents a command parameter.
+type Parameter struct {
+	// Name of parameter.
+	Name string
+	// Help for parameter.
+	Help string
+	// Optional defines if current parameter is optional.
+	Optional bool
 }
 
 // A Commands is a slice of Command pointers
@@ -61,48 +71,48 @@ func (c *Command) AddChild(cmds ...*Command) {
 }
 
 // Execute an interactive CLI until users exits.
-func (c *Command) Execute() error {
-	if c.Run != nil && len(c.childs) != 0 {
+func (self *Command) Execute() error {
+	if self.Run != nil && len(self.childs) != 0 {
 		return errors.New("Current command should not define an action and has childs")
 	}
-	if c.Load != nil && c.Run != nil {
+	if self.Load != nil && self.Run != nil {
 		return errors.New("Only Run or Load functions should be defined, not both")
 	}
 
-	if c.Load != nil {
-		c.Load(c)
+	if self.Load != nil {
+		self.Load(self)
 	}
-	if c.Run == nil && len(c.childs) == 0 {
+	if self.Run == nil && len(self.childs) == 0 {
 		return errors.New("Current command has neither action and childs")
 	}
 
-	if !RecurseParents(c, func(cmd *Command, first, last bool) bool {
-		if cmd.exit != nil {
-			c.exit = cmd.exit
-			c.AddChild(cmd.exit)
-			return true
-		}
-		return false
-	}) {
-		ExitCommand(c)
-	}
-	if !RecurseParents(c, func(cmd *Command, first, last bool) bool {
+	if !RecurseParents(self, func(cmd *Command, first, last bool) bool {
 		if cmd.help != nil {
-			c.help = cmd.help
-			c.AddChild(cmd.help)
+			self.help = cmd.help
+			self.AddChild(cmd.help)
 			return true
 		}
 		return false
 	}) {
-		HelpCommand(c)
+		HelpCommand(self)
+	}
+	if !RecurseParents(self, func(cmd *Command, first, last bool) bool {
+		if cmd.exit != nil {
+			self.exit = cmd.exit
+			self.AddChild(cmd.exit)
+			return true
+		}
+		return false
+	}) {
+		ExitCommand(self)
 	}
 
 	for {
-		if c.parent == nil {
-			fmt.Printf("%s>", c.Name)
+		if self.parent == nil {
+			fmt.Printf("%s>", self.Name)
 		} else {
 			prompt := ""
-			RecurseParents(c, func(cmd *Command, first, last bool) bool {
+			RecurseParents(self, func(cmd *Command, first, last bool) bool {
 				if first {
 					prompt = fmt.Sprintf("%s)>", cmd.Name)
 					return false
@@ -128,20 +138,16 @@ func (c *Command) Execute() error {
 			continue
 		}
 
-		args := strings.Split(input, " ")
-		selCmd := c.Find(args[0])
+		args := parseArgs(input)
+		selCmd := self.Find(args[0])
 		if selCmd == nil {
 			fmt.Printf(
 				"Invalid command, type %s for available commands\n",
-				c.help.Name)
+				self.help.Name)
 			continue
 		}
-		if selCmd == c.exit {
+		if selCmd == self.exit {
 			break
-		}
-		if selCmd == c.help {
-			c.ShowHelp()
-			continue
 		}
 		if selCmd.Run == nil &&
 			selCmd.Load == nil &&
@@ -167,8 +173,8 @@ func (c *Command) Execute() error {
 // command.
 func ExitCommand(parent *Command) *Command {
 	cmd := &Command{
-		Name:  "exit",
-		Short: "Exit from this program",
+		Name: "exit",
+		Help: "Exit from this program",
 	}
 	parent.exit = cmd
 	parent.AddChild(cmd)
@@ -176,8 +182,8 @@ func ExitCommand(parent *Command) *Command {
 }
 
 // Find finds a command by its name.
-func (c *Command) Find(name string) *Command {
-	for _, v := range c.childs {
+func (self *Command) Find(name string) *Command {
+	for _, v := range self.childs {
 		if v.Name == name {
 			return v
 		}
@@ -190,8 +196,15 @@ func (c *Command) Find(name string) *Command {
 // command.
 func HelpCommand(parent *Command) *Command {
 	cmd := &Command{
-		Name:  "help",
-		Short: "help about this program",
+		Name: "help",
+		Help: "Show an overview help",
+		Parameters: []Parameter{
+			Parameter{
+				Name:     "command",
+				Help:     "Show help of specified command",
+				Optional: true},
+		},
+		Run: DefaultHelp,
 	}
 	parent.help = cmd
 	parent.AddChild(cmd)
@@ -200,12 +213,12 @@ func HelpCommand(parent *Command) *Command {
 
 // RecurseParents interates from current commands to all its parents until
 // the function returns true.
-func RecurseParents(c *Command, f RecurseGet) (successful bool) {
-	if f(c, true, false) {
+func RecurseParents(cmd *Command, f RecurseGet) (successful bool) {
+	if f(cmd, true, false) {
 		return true
 	}
 
-	parent := c.parent
+	parent := cmd.parent
 	if parent == nil {
 		return false
 	}
@@ -223,9 +236,47 @@ func RecurseParents(c *Command, f RecurseGet) (successful bool) {
 	return false
 }
 
-// ShowHelp prints out short help of all child commands.
-func (c *Command) ShowHelp() {
-	for _, v := range c.childs {
-		fmt.Printf("%s\t\t%s\n", v.Name, v.Short)
+// DefaultHelp defines a default output for help command.
+func DefaultHelp(cmd *Command, args []string) {
+	parent := cmd.parent
+	if len(args) > 1 {
+		fmt.Println("The help command cannot take more than 1 parameter")
+		return
+	}
+	if len(args) == 0 {
+		maxLen := 0
+		for _, v := range parent.childs {
+			if len(v.Name) > maxLen {
+				maxLen = len(v.Name)
+			}
+		}
+		fmt.Println(parent.Help, "\n")
+		fmt.Println("Available commands:")
+		fmtStr := fmt.Sprintf("  %%-%ds  %%s\n", maxLen)
+		for _, v := range parent.childs {
+			fmt.Printf(fmtStr, v.Name, v.Help)
+		}
+	} else {
+		selCmd := parent.Find(args[0])
+		if selCmd == nil {
+			fmt.Printf("The command %s cannot be found", args[0])
+			return
+		}
+
+		fmt.Println(selCmd.Help)
+		if len(selCmd.Parameters) == 0 {
+			return
+		}
+		maxLen := 0
+		for _, v := range selCmd.Parameters {
+			if len(v.Name) > maxLen {
+				maxLen = len(v.Name)
+			}
+		}
+		fmt.Println("\nAvailable parameters:")
+		fmtStr := fmt.Sprintf("  %%-%ds  %%s\n", maxLen)
+		for _, v := range selCmd.Parameters {
+			fmt.Printf(fmtStr, v.Name, v.Help)
+		}
 	}
 }
